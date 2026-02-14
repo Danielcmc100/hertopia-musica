@@ -16,12 +16,14 @@ class MidiPlayer:
         transpose: int = 0,
         dry_run: bool = False,
         layout: str = "keyboard",
+        device_path: str | None = None,
     ):
         self.midi_file = midi_file
         self.speed = speed
         self.transpose = transpose
         self.dry_run = dry_run
         self.layout = layout
+        self.device_path = device_path
 
         self.current_mapping: dict[int, int]
         if layout == "guitar":
@@ -30,7 +32,9 @@ class MidiPlayer:
             self.current_mapping = DRUM_MAPPING
         else:
             self.current_mapping = KEYBOARD_MAPPING
-        self.input_handler = InputHandler(self.current_mapping, dry_run=dry_run)
+        self.input_handler = InputHandler(
+            self.current_mapping, dry_run=dry_run, device_path=device_path
+        )
         self.running = False
         self.active_notes: dict[int, int] = {}
         self.guitar_sustain_extension = 0.1

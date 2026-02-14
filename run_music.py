@@ -7,6 +7,12 @@ if __name__ == "__main__":
 
     parser.add_argument("file", help="Path to the MIDI file")  # pyright: ignore[reportUnusedCallResult]
     parser.add_argument(
+        "--device-path",
+        type=str,
+        default=None,
+        help="Path to a specific input device (e.g., /dev/input/eventX)",
+    )
+    parser.add_argument(
         "--speed", type=float, default=1.0, help="Playback speed (default: 1.0)"
     )
     parser.add_argument(
@@ -30,6 +36,7 @@ if __name__ == "__main__":
         transpose=args.transpose,
         dry_run=args.dry_run,
         layout=args.layout,
+        device_path=args.device_path,
     )
 
     player.start()

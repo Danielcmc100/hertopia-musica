@@ -1,0 +1,5 @@
+# /etc/udev/rules.d/99-hertopia-ignore.rules
+# Ignore any input device with a name starting with "HertopiaBot"
+# This prevents the main desktop environment (GNOME/KDE/Wayland) from listening to these devices.
+# Also grant the local user access to the device node.
+SUBSYSTEM=="input", ATTRS{name}=="HertopiaBot*", ENV{LIBINPUT_IGNORE_DEVICE}="1", OWNER="daniel"
