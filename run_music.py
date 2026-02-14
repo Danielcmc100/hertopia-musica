@@ -1,4 +1,5 @@
 import argparse
+import os
 
 from player import MidiPlayer
 
@@ -46,10 +47,21 @@ if __name__ == "__main__":
             device_file = f".device_{args.id}"
             try:
                 with open(device_file, "r") as f:
-                    device_path = f.read().strip()
-                    print(
-                        f"Auto-detected device path for Instance {args.id}: {device_path}"
-                    )
+                    content = f.read().strip()
+                    if os.path.exists(content):
+                        device_path = content
+                        print(
+                            f"Auto-detected device path for Instance {args.id}: {device_path}"
+                        )
+                    else:
+                        print(
+                            f"Warning: Stale device file found. Path '{content}' does not exist."
+                        )
+                        print(f"Is Instance {args.id} running?")
+                        # We could fallback to None (Global) or exit.
+                        # If the user specifically asked for ID 1, failing is probably better than guessing?
+                        # But existing behavior for "file not found" was "pass" (uses global).
+                        # Let's stick to "pass" but with the warning.
             except FileNotFoundError:
                 print(
                     f"Warning: Could not find '{device_file}'. Using standard global input."

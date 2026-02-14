@@ -109,11 +109,46 @@ echo "---------------------------------------------------"
 # When using explorer /desktop, the initial PID might exit early.
 # We need to wait for the actual game binary.
 
-echo "Waiting for game process to initialize..."
-sleep 5
+echo "Waiting for window 'Heartopia_$INSTANCE_ID' (or suffixed) to appear..."
+# Wait up to 60 seconds for the window to start
+match_found=false
+WINDOW_NAME=""
 
-echo "Monitoring xdt.exe..."
-while pgrep -f "xdt.exe" > /dev/null; do
+check_window() {
+    if xwininfo -name "Heartopia_$INSTANCE_ID" > /dev/null 2>&1; then
+        WINDOW_NAME="Heartopia_$INSTANCE_ID"
+        return 0
+    elif xwininfo -name "Heartopia_$INSTANCE_ID - Wine Desktop" > /dev/null 2>&1; then
+        WINDOW_NAME="Heartopia_$INSTANCE_ID - Wine Desktop"
+        return 0
+    fi
+    return 1
+}
+
+for i in {1..60}; do
+    if check_window; then
+        match_found=true
+        break
+    fi
+    sleep 1
+done
+
+if [ "$match_found" = false ]; then
+    echo "Error: Timed out waiting for window 'Heartopia_$INSTANCE_ID'."
+    exit 1
+fi
+
+echo "Window found: '$WINDOW_NAME'. Configuring monitoring..."
+
+echo "Starting Input Bridge for window '$WINDOW_NAME'..."
+# Log bridge output for debugging (in WORK_DIR)
+BRIDGE_LOG="$WORK_DIR/bridge_${INSTANCE_ID}.log"
+# Run uv from the project directory to ensure access to script and environment
+uv run --directory "$WORK_DIR" --with python-xlib input_bridge.py "$DEVICE_PATH" --window "$WINDOW_NAME" > "$BRIDGE_LOG" 2>&1 &
+BRIDGE_PID=$!
+
+echo "Monitoring window '$WINDOW_NAME'..."
+while xwininfo -name "$WINDOW_NAME" > /dev/null 2>&1; do
     sleep 2
 done
 

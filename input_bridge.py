@@ -87,11 +87,69 @@ def main():
 
     # Wait for game window
     print(f"Bridge: Waiting for '{target_window_name}' window...", flush=True)
-    for i in range(30):
-        game_window = find_game_window()
-        if game_window:
-            print(f"Bridge: Found Game Window! ID={hex(game_window.id)}", flush=True)
-            break
+    for i in range(60):
+        # 1. Find the top-level container (Wine Desktop or just the window)
+        container = find_game_window()
+        if container:
+            # 2. If it's a Wine Desktop, we need to find the actual game window inside it.
+            # The game window usually has the name "Heartopia" (without suffix) and/or class "steam_proton".
+            # If target_window_name is "Heartopia_1", the container is found.
+            # But the child might be just "Heartopia".
+
+            print(
+                f"Bridge: Found Container search root: {container.get_wm_name()} (ID={hex(container.id)})",
+                flush=True,
+            )
+
+            # Helper to find the game window inside the container
+            def find_inner_game_window(parent):
+                try:
+                    children = parent.query_tree().children
+                except Exception:
+                    return None
+
+                for child in children:
+                    try:
+                        name = child.get_wm_name()
+                        # print(f"Bridge: Checking child: {name} (ID={hex(child.id)})", flush=True)
+                        if name == "Heartopia":  # The actual game name inside wine
+                            return child
+                        if name == "Heartopia_1":  # Maybe?
+                            return child
+                    except Exception:
+                        pass
+
+                    # Recurse
+                    found = find_inner_game_window(child)
+                    if found:
+                        return found
+                return None
+
+            # If the container ITSELF is the game (no suffix matched), use it.
+            # If matched via suffix, search children.
+            wm_name = container.get_wm_name()
+            if wm_name and "Wine Desktop" in wm_name:
+                print("Bridge: Searching for inner 'Heartopia' window...", flush=True)
+                inner = find_inner_game_window(container)
+                if inner:
+                    game_window = inner
+                    print(
+                        f"Bridge: Found Inner Game Window! ID={hex(game_window.id)} Name={game_window.get_wm_name()}",
+                        flush=True,
+                    )
+                    break
+                else:
+                    # Fallback to container if no child found yet (maybe starting up?)
+                    pass
+            else:
+                # Direct match, use it
+                game_window = container
+                print(
+                    f"Bridge: Match is direct game window. ID={hex(game_window.id)}",
+                    flush=True,
+                )
+                break
+
         time.sleep(1)
 
     if not game_window:
@@ -102,6 +160,10 @@ def main():
         if event.type == evdev.ecodes.EV_KEY:
             # Linux input keycode to X11 keycode mapping is usually +8
             x_keycode = event.code + 8
+            print(
+                f"Bridge: Read Event: Code={event.code}, Value={event.value} -> X Keycode={x_keycode}",
+                flush=True,
+            )
 
             # Send FocusIn event occasionally to trick game into thinking it has focus
             # Doing this too often might flicker, but let's try just once or periodically?
@@ -116,6 +178,7 @@ def main():
 
                 # 0 = Release, 1 = Press
                 if event.value == 1:  # Press
+                    print(f"Bridge: Injecting Press {x_keycode}", flush=True)
                     # Send FocusIn before Press
                     game_window.send_event(
                         focus_evt, propagate=False, event_mask=X.FocusChangeMask
@@ -141,6 +204,7 @@ def main():
                     d.flush()
 
                 elif event.value == 0:  # Release
+                    print(f"Bridge: Injecting Release {x_keycode}", flush=True)
                     event_obj = xevent.KeyRelease(
                         time=int(time.time()),
                         root=root.id,
@@ -158,9 +222,10 @@ def main():
                         event_obj, propagate=False, event_mask=X.KeyReleaseMask
                     )
                     d.flush()
-            except error.XError:
-                # print(f"Bridge: X Protocol Error ({e}). Window might be gone. Resetting...")
-                # We can be silent or verbose. Let's be silent to avoid spamming user console
+            except error.XError as e:
+                print(
+                    f"Bridge: X Protocol Error ({e}). Window might be gone.", flush=True
+                )
                 game_window = None
                 continue
 

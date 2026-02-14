@@ -29,9 +29,14 @@ class InputHandler:
         self.dry_run = dry_run
         self.ui: "UInput | None" = None
         self.key_mapping = key_mapping
+        self._closed = False
+        self._lock = None
 
         if not self.dry_run and _UInput and e:
             try:
+                import threading
+
+                self._lock = threading.Lock()
                 if device_path and _InputDevice:
                     # Connect to an existing device created by device_manager.py
                     self.ui = _InputDevice(device_path)  # type: ignore
@@ -61,13 +66,22 @@ class InputHandler:
             return
 
         try:
-            self.ui.write(e.EV_KEY, key_code, 1)  # Press # type: ignore
-            self.ui.write(e.EV_SYN, e.SYN_REPORT, 0)  # type: ignore
+            with self._lock if self._lock else object():  # type: ignore
+                if self._closed:
+                    return
+                self.ui.write(e.EV_KEY, key_code, 1)  # Press # type: ignore
+                self.ui.write(e.EV_SYN, e.SYN_REPORT, 0)  # type: ignore
+
             time.sleep(duration)
-            self.ui.write(e.EV_KEY, key_code, 0)  # Release # type: ignore
-            self.ui.write(e.EV_SYN, e.SYN_REPORT, 0)  # type: ignore
+
+            with self._lock if self._lock else object():  # type: ignore
+                if self._closed:
+                    return
+                self.ui.write(e.EV_KEY, key_code, 0)  # Release # type: ignore
+                self.ui.write(e.EV_SYN, e.SYN_REPORT, 0)  # type: ignore
         except Exception as ex:
-            if not self.dry_run:
+            # If device is closed during sleep, we might get error, which is fine to ignore if we rely on cleanup
+            if not self.dry_run and not self._closed:
                 print(f"Error pressing key: {ex}")
 
     def key_down(self, key_code: int) -> None:
@@ -76,10 +90,13 @@ class InputHandler:
             return
 
         try:
-            self.ui.write(e.EV_KEY, key_code, 1)  # type: ignore
-            self.ui.write(e.EV_SYN, e.SYN_REPORT, 0)  # type: ignore
+            with self._lock if self._lock else object():  # type: ignore
+                if self._closed:
+                    return
+                self.ui.write(e.EV_KEY, key_code, 1)  # type: ignore
+                self.ui.write(e.EV_SYN, e.SYN_REPORT, 0)  # type: ignore
         except Exception as ex:
-            if not self.dry_run:
+            if not self.dry_run and not self._closed:
                 print(f"Error key down: {ex}")
 
     def key_up(self, key_code: int) -> None:
@@ -88,10 +105,13 @@ class InputHandler:
             return
 
         try:
-            self.ui.write(e.EV_KEY, key_code, 0)  # type: ignore
-            self.ui.write(e.EV_SYN, e.SYN_REPORT, 0)  # type: ignore
+            with self._lock if self._lock else object():  # type: ignore
+                if self._closed:
+                    return
+                self.ui.write(e.EV_KEY, key_code, 0)  # type: ignore
+                self.ui.write(e.EV_SYN, e.SYN_REPORT, 0)  # type: ignore
         except Exception as ex:
-            if not self.dry_run:
+            if not self.dry_run and not self._closed:
                 print(f"Error key up: {ex}")
 
     def cleanup(self) -> None:
@@ -99,15 +119,20 @@ class InputHandler:
         if self.dry_run or not self.ui or not e:
             return
 
+        if self._closed:
+            return
+
         try:
-            # Release all mapped keys to be safe
-            for k in self.key_mapping.values():
-                if isinstance(k, list):
-                    for sub_k in k:
-                        self.ui.write(e.EV_KEY, sub_k, 0)
-                else:
-                    self.ui.write(e.EV_KEY, k, 0)  # type: ignore
-            self.ui.write(e.EV_SYN, e.SYN_REPORT, 0)  # type: ignore
-            self.ui.close()
+            with self._lock if self._lock else object():  # type: ignore
+                self._closed = True
+                # Release all mapped keys to be safe
+                for k in self.key_mapping.values():
+                    if isinstance(k, list):
+                        for sub_k in k:
+                            self.ui.write(e.EV_KEY, sub_k, 0)
+                    else:
+                        self.ui.write(e.EV_KEY, k, 0)  # type: ignore
+                self.ui.write(e.EV_SYN, e.SYN_REPORT, 0)  # type: ignore
+                self.ui.close()
         except Exception as ex:
             print(f"Error cleanup: {ex}")
