@@ -79,32 +79,33 @@ GUITAR_MAPPING: dict[int, int] = {
 }
 
 
-DRUM_MAPPING: dict[int, int] = {
-    # Kick (Bass Drum) -> H
-    35: k("KEY_H"),  # Acoustic Bass Drum
-    36: k("KEY_H"),  # Bass Drum 1
-    # Snare -> J
-    38: k("KEY_J"),  # Acoustic Snare
-    40: k("KEY_J"),  # Electric Snare
-    # Hi-Hats -> K (Closed), L (Open/Pedal)
-    42: k("KEY_K"),  # Closed Hi-Hat
-    44: k("KEY_L"),  # Pedal Hi-Hat
-    46: k("KEY_L"),  # Open Hi-Hat
-    # Toms -> Y (Low), U (Mid), I (High)
+DRUM_MAPPING: dict[int, int | list[int]] = {
+    # Kick (Bass Drum) -> Y, H (Alternate)
+    35: [k("KEY_Y"), k("KEY_H")],  # Acoustic Bass Drum
+    36: [k("KEY_Y"), k("KEY_H")],  # Bass Drum 1
+    # Snare -> U, J (Alternate)
+    38: [k("KEY_U"), k("KEY_J")],  # Acoustic Snare
+    40: [k("KEY_U"), k("KEY_J")],  # Electric Snare
+    # Hi-Hats -> I, K (Closed Alternate), O (Open), L (Pedal/Crash??)
+    # User Spec: I, K -> Closed Hi-Hat (42). O -> Open Hi-Hat (46). L -> Crash (49).
+    42: [k("KEY_I"), k("KEY_K")],  # Closed Hi-Hat
+    44: [k("KEY_I"), k("KEY_K")],  # Pedal Hi-Hat (Mapped to Closed for safety)
+    46: k("KEY_O"),  # Open Hi-Hat
+    # Toms -> mapped to primary lane keys
     41: k("KEY_Y"),  # Low Floor Tom
     43: k("KEY_Y"),  # High Floor Tom
     45: k("KEY_U"),  # Low Tom
     47: k("KEY_U"),  # Low-Mid Tom
     48: k("KEY_I"),  # Hi-Mid Tom
     50: k("KEY_I"),  # High Tom
-    # Cymbals -> O
-    49: k("KEY_O"),  # Crash Cymbal 1
+    # Cymbals -> L (Crash), O (Ride/Others)
+    49: k("KEY_L"),  # Crash Cymbal 1
+    57: k("KEY_L"),  # Crash Cymbal 2
     51: k("KEY_O"),  # Ride Cymbal 1
-    52: k("KEY_O"),  # Chinese Cymbal
-    53: k("KEY_O"),  # Ride Bell
-    55: k("KEY_O"),  # Splash Cymbal
-    57: k("KEY_O"),  # Crash Cymbal 2
     59: k("KEY_O"),  # Ride Cymbal 2
+    53: k("KEY_O"),  # Ride Bell
+    52: k("KEY_O"),  # Chinese Cymbal
+    55: k("KEY_O"),  # Splash Cymbal
 }
 
 

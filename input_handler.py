@@ -1,5 +1,5 @@
 import time
-from typing import TYPE_CHECKING, Sequence, cast
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from evdev import UInput
@@ -21,7 +21,7 @@ class InputHandler:
 
     def __init__(
         self,
-        key_mapping: dict[int, int],
+        key_mapping: dict[int, int | list[int]],
         dry_run: bool = False,
         device_path: str | None = None,
         device_name: str = "HertopiaVirtualKeyboard",
@@ -38,7 +38,14 @@ class InputHandler:
                 else:
                     # Create a new UInput device
                     # UInput expects Dict[int, Sequence[int]] | None
-                    vals = cast(Sequence[int], list(self.key_mapping.values()))
+                    # Flatten the values list because it might contain lists if multiple keys are mapped to one note
+                    vals: list[int] = []
+                    for v in self.key_mapping.values():
+                        if isinstance(v, list):
+                            vals.extend(v)
+                        else:
+                            vals.append(v)
+
                     cap = {e.EV_KEY: vals}
                     self.ui = _UInput(cap, name=device_name, version=0x1)
             except PermissionError:
@@ -95,7 +102,11 @@ class InputHandler:
         try:
             # Release all mapped keys to be safe
             for k in self.key_mapping.values():
-                self.ui.write(e.EV_KEY, k, 0)  # type: ignore
+                if isinstance(k, list):
+                    for sub_k in k:
+                        self.ui.write(e.EV_KEY, sub_k, 0)
+                else:
+                    self.ui.write(e.EV_KEY, k, 0)  # type: ignore
             self.ui.write(e.EV_SYN, e.SYN_REPORT, 0)  # type: ignore
             self.ui.close()
         except Exception as ex:

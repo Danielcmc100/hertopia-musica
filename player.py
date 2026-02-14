@@ -1,5 +1,6 @@
 import threading
 import time
+from typing import cast
 
 import mido
 from mido import Message
@@ -25,19 +26,20 @@ class MidiPlayer:
         self.layout = layout
         self.device_path = device_path
 
-        self.current_mapping: dict[int, int]
+        self.current_mapping: dict[int, int | list[int]]
         if layout == "guitar":
-            self.current_mapping = GUITAR_MAPPING
+            self.current_mapping = cast(dict[int, int | list[int]], GUITAR_MAPPING)
         elif layout == "drums":
             self.current_mapping = DRUM_MAPPING
         else:
-            self.current_mapping = KEYBOARD_MAPPING
+            self.current_mapping = cast(dict[int, int | list[int]], KEYBOARD_MAPPING)
         self.input_handler = InputHandler(
             self.current_mapping, dry_run=dry_run, device_path=device_path
         )
         self.running = False
         self.active_notes: dict[int, int] = {}
         self.guitar_sustain_extension = 0.1
+        self.drum_alternation_index: dict[int, int] = {}
 
     def start(self) -> None:
         try:
@@ -160,7 +162,8 @@ class MidiPlayer:
             effective_note = self._fold_note(note, 48, 84)
 
             if effective_note in self.current_mapping:
-                key_code = self.current_mapping[effective_note]
+                val = self.current_mapping[effective_note]
+                key_code = val[0] if isinstance(val, list) else val
                 key_name = get_key_name(key_code)
                 print(f"Note {note} (Folded to {effective_note}) -> Key '{key_name}'")
 
@@ -179,7 +182,8 @@ class MidiPlayer:
         # Guitar Mode Tap Logic: Fire-and-forget, ignore note_off
         if msg_type == "note_on" and velocity > 0:
             if effective_note in self.current_mapping:
-                key_code = self.current_mapping[effective_note]
+                val = self.current_mapping[effective_note]
+                key_code = val[0] if isinstance(val, list) else val
                 key_name = get_key_name(key_code)
                 print(
                     f"Note ON {original_note} (Folded to {effective_note}) -> Key '{key_name}'"
@@ -195,7 +199,18 @@ class MidiPlayer:
         # Drum Logic: Direct mapping, no folding, fire-and-forget
         if msg_type == "note_on" and velocity > 0:
             if note in self.current_mapping:
-                key_code = self.current_mapping[note]
+                mapped_val = self.current_mapping[note]
+
+                # Handle single int or list of ints (alternating)
+                if isinstance(mapped_val, list):
+                    # Get current index for this note, default to 0
+                    idx = self.drum_alternation_index.get(note, 0)
+                    key_code = mapped_val[idx % len(mapped_val)]
+                    # Increment for next time
+                    self.drum_alternation_index[note] = idx + 1
+                else:
+                    key_code = mapped_val
+
                 key_name = get_key_name(key_code)
                 print(f"Drum Hit {note} -> Key '{key_name}'")
 
