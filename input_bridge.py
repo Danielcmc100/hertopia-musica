@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 import os
 import sys
+import time
 
 import evdev
 from Xlib import X, display
-from Xlib.ext import xtest
+from Xlib.protocol import event as xevent
 
 
 def main():
@@ -35,46 +36,123 @@ def main():
 
     print("Bridge: Listening for events...", flush=True)
 
-    # Find the game window (or any mapped window) and focus it
+    # Find the game window on the main display
     root = d.screen().root
+    game_window = None
 
-    def focus_game_window():
-        children = root.query_tree().children
-        for window in children:
-            # Simple heuristic: focus the first mapped window that isn't root
-            if window.get_attributes().map_state == X.IsViewable:
-                d.set_input_focus(window, X.RevertToParent, X.CurrentTime)
-                d.sync()
-                # print(f"Bridge: Focused window {window.id}", flush=True)
-                return True
-        return False
+    def find_game_window(root_window=None):
+        if root_window is None:
+            root_window = root
 
-    # Grab device to prevent double input if running on same X server (optional, but good)
-    # dev.grab()
+        # Breadth-first search for better performance maybe? Or DFS is fine.
+        # We need to find the window named "Heartopia" which is NOT "Wine Desktop"
+
+        children = []
+        try:
+            # Basic tree traversal
+            tree = root_window.query_tree()
+            children = tree.children
+        except Exception:
+            return None
+
+        # Check children
+        for child in children:
+            try:
+                wm_name = child.get_wm_name()
+                if wm_name == "Heartopia":  # Exact match preferred
+                    return child
+
+                # If we find a window that might be it, but we want to be sure, we could check class.
+                # But exact name "Heartopia" is distinct from "Heartopia - Wine Desktop"
+            except Exception:
+                pass
+
+        # Recurse
+        for child in children:
+            found = find_game_window(child)
+            if found:
+                return found
+
+        return None
+
+    # Wait for game window
+    print("Bridge: Waiting for 'Heartopia' window...", flush=True)
+    for i in range(30):
+        game_window = find_game_window()
+        if game_window:
+            print(f"Bridge: Found Game Window! ID={hex(game_window.id)}", flush=True)
+            break
+        time.sleep(1)
+
+    if not game_window:
+        print("Bridge: Could not find game window. Exiting.", flush=True)
+        sys.exit(1)
 
     for event in dev.read_loop():
-        # Periodically ensure focus (simple hack, better would be event listener)
-        # focus_game_window()
-
         if event.type == evdev.ecodes.EV_KEY:
             # Linux input keycode to X11 keycode mapping is usually +8
             x_keycode = event.code + 8
 
-            # 0 = Release, 1 = Press, 2 = Repeat
-            focus_game_window()  # Ensure game is focused before keypress
+            # Send FocusIn event occasionally to trick game into thinking it has focus
+            # Doing this too often might flicker, but let's try just once or periodically?
 
-            if event.value == 1:  # Press
-                xtest.fake_input(d, X.KeyPress, x_keycode)
-                d.sync()
-            elif event.value == 0:  # Release
-                xtest.fake_input(d, X.KeyRelease, x_keycode)
-                d.sync()
-            # We treat Repeat (2) as Press for games that need it, or ignore?
-            # Games usually handle repeat themselves or use raw events.
-            # safe to forward repeats as KeyPress
-            elif event.value == 2:
-                xtest.fake_input(d, X.KeyPress, x_keycode)
-                d.sync()
+            try:
+                focus_evt = xevent.FocusIn(
+                    display=d,
+                    window=game_window,
+                    detail=X.NotifyDetailNone,
+                    mode=X.NotifyNormal,
+                )
+
+                # 0 = Release, 1 = Press
+                if event.value == 1:  # Press
+                    # Send FocusIn before Press
+                    game_window.send_event(
+                        focus_evt, propagate=False, event_mask=X.FocusChangeMask
+                    )
+                    d.flush()
+
+                    event_obj = xevent.KeyPress(
+                        time=int(time.time()),
+                        root=root.id,
+                        window=game_window.id,
+                        same_screen=1,
+                        child=X.NONE,
+                        root_x=0,
+                        root_y=0,
+                        event_x=0,
+                        event_y=0,
+                        state=0,
+                        detail=x_keycode,
+                    )
+                    game_window.send_event(
+                        event_obj, propagate=False, event_mask=X.KeyPressMask
+                    )
+                    d.flush()
+
+                elif event.value == 0:  # Release
+                    event_obj = xevent.KeyRelease(
+                        time=int(time.time()),
+                        root=root.id,
+                        window=game_window.id,
+                        same_screen=1,
+                        child=X.NONE,
+                        root_x=0,
+                        root_y=0,
+                        event_x=0,
+                        event_y=0,
+                        state=0,
+                        detail=x_keycode,
+                    )
+                    game_window.send_event(
+                        event_obj, propagate=False, event_mask=X.KeyReleaseMask
+                    )
+                    d.flush()
+            except error.XError:
+                # print(f"Bridge: X Protocol Error ({e}). Window might be gone. Resetting...")
+                # We can be silent or verbose. Let's be silent to avoid spamming user console
+                game_window = None
+                continue
 
 
 if __name__ == "__main__":
