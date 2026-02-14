@@ -60,8 +60,8 @@ trap cleanup EXIT INT TERM
 # 2. Start Input Bridge (Background)
 # Explicitly target MAIN DISPLAY :0
 export DISPLAY=:0
-echo "Starting Input Bridge..."
-uv run --with python-xlib input_bridge.py "$DEVICE_PATH" &
+echo "Starting Input Bridge for window 'Heartopia_$INSTANCE_ID'..."
+uv run --with python-xlib input_bridge.py "$DEVICE_PATH" --window "Heartopia_$INSTANCE_ID" &
 BRIDGE_PID=$!
 
 # 3. Launch Game mimicking Heroic
@@ -89,12 +89,12 @@ else
     LAUNCHER=""
 fi
 
-echo "Launching Heartopia in Wine Virtual Desktop..."
+echo "Launching Heartopia in Wine Virtual Desktop (Heartopia_$INSTANCE_ID)..."
 # Use eval or conditional to handle empty LAUNCHER correctly
 if [ -n "$LAUNCHER" ]; then
-    "$LAUNCHER" "$PROTON_BIN" run explorer /desktop=Heartopia,1280x720 "$GAME_EXE" -runInBackground &
+    "$LAUNCHER" "$PROTON_BIN" run explorer /desktop=Heartopia_$INSTANCE_ID,800x600 "$GAME_EXE" -runInBackground &
 else
-    "$PROTON_BIN" run explorer /desktop=Heartopia,1280x720 "$GAME_EXE" -runInBackground &
+    "$PROTON_BIN" run explorer /desktop=Heartopia_$INSTANCE_ID,800x600 "$GAME_EXE" -runInBackground &
 fi
 GAME_PID=$!
 

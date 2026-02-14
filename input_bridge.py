@@ -1,19 +1,24 @@
 #!/usr/bin/env python3
+import argparse
 import os
 import sys
 import time
 
 import evdev
-from Xlib import X, display
+from Xlib import X, display, error
 from Xlib.protocol import event as xevent
 
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: input_bridge.py <device_path>")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="Bridge uinput events to X11 window.")
+    parser.add_argument("device_path", help="Path to input device")
+    parser.add_argument(
+        "--window", default="Heartopia", help="Target window name (WM_NAME)"
+    )
+    args = parser.parse_args()
 
-    device_path = sys.argv[1]
+    device_path = args.device_path
+    target_window_name = args.window
 
     if not os.path.exists(device_path):
         print(f"Error: Device {device_path} not found.")
@@ -59,7 +64,12 @@ def main():
         for child in children:
             try:
                 wm_name = child.get_wm_name()
-                if wm_name == "Heartopia":  # Exact match preferred
+                # Match strict name or Wine virtual desktop format
+                if wm_name and (
+                    wm_name == target_window_name
+                    or wm_name == f"{target_window_name} - Wine Desktop"
+                    or f"{target_window_name} -" in wm_name
+                ):
                     return child
 
                 # If we find a window that might be it, but we want to be sure, we could check class.
@@ -76,7 +86,7 @@ def main():
         return None
 
     # Wait for game window
-    print("Bridge: Waiting for 'Heartopia' window...", flush=True)
+    print(f"Bridge: Waiting for '{target_window_name}' window...", flush=True)
     for i in range(30):
         game_window = find_game_window()
         if game_window:
