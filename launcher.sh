@@ -60,6 +60,9 @@ trap cleanup EXIT INT TERM
 # 2. Start Input Bridge (Background)
 # Explicitly target MAIN DISPLAY :0
 export DISPLAY=:0
+export WINE_BROWSER="/usr/bin/xdg-open"
+# Crucial for xdg-open to work from within Wine
+export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$(id -u)/bus"
 echo "Starting Input Bridge for window 'Heartopia_$INSTANCE_ID'..."
 uv run --with python-xlib input_bridge.py "$DEVICE_PATH" --window "Heartopia_$INSTANCE_ID" &
 BRIDGE_PID=$!
@@ -67,7 +70,24 @@ BRIDGE_PID=$!
 # 3. Launch Game mimicking Heroic
 # Proton Configuration
 PROTON_BIN="/home/daniel/.config/heroic/tools/proton/GE-Proton-latest/proton"
-WINE_PREFIX="/home/daniel/Games/Heroic/Prefixes/default/Heartopia"
+BASE_PREFIX="/home/daniel/Games/Heroic/Prefixes/default/Heartopia"
+WINE_PREFIX="${BASE_PREFIX}_${INSTANCE_ID}"
+
+# Check if prefix exists, if not copy from base
+if [ ! -d "$WINE_PREFIX" ]; then
+    echo "First run for Instance $INSTANCE_ID. Creating dedicated Wine Prefix..."
+    echo "Copying template from $BASE_PREFIX to $WINE_PREFIX..."
+    echo "This may take a few minutes..."
+    if [ -d "$BASE_PREFIX" ]; then
+        cp -r "$BASE_PREFIX" "$WINE_PREFIX"
+        echo "Prefix created successfully."
+    else
+        echo "Error: Base prefix template '$BASE_PREFIX' not found!"
+        exit 1
+    fi
+else
+    echo "Using Wine Prefix: $WINE_PREFIX"
+fi
 GAME_EXE="/home/daniel/.local/share/Steam/steamapps/common/Heartopia/xdt.exe"
 # Start in directory
 cd "$(dirname "$GAME_EXE")"
@@ -92,9 +112,9 @@ fi
 echo "Launching Heartopia in Wine Virtual Desktop (Heartopia_$INSTANCE_ID)..."
 # Use eval or conditional to handle empty LAUNCHER correctly
 if [ -n "$LAUNCHER" ]; then
-    "$LAUNCHER" "$PROTON_BIN" run explorer /desktop=Heartopia_$INSTANCE_ID,800x600 "$GAME_EXE" -runInBackground &
+    "$LAUNCHER" "$PROTON_BIN" run explorer /desktop=Heartopia_$INSTANCE_ID,640x480 "$GAME_EXE" -runInBackground &
 else
-    "$PROTON_BIN" run explorer /desktop=Heartopia_$INSTANCE_ID,800x600 "$GAME_EXE" -runInBackground &
+    "$PROTON_BIN" run explorer /desktop=Heartopia_$INSTANCE_ID,640x480 "$GAME_EXE" -runInBackground &
 fi
 GAME_PID=$!
 

@@ -156,78 +156,83 @@ def main():
         print("Bridge: Could not find game window. Exiting.", flush=True)
         sys.exit(1)
 
-    for event in dev.read_loop():
-        if event.type == evdev.ecodes.EV_KEY:
-            # Linux input keycode to X11 keycode mapping is usually +8
-            x_keycode = event.code + 8
-            print(
-                f"Bridge: Read Event: Code={event.code}, Value={event.value} -> X Keycode={x_keycode}",
-                flush=True,
-            )
-
-            # Send FocusIn event occasionally to trick game into thinking it has focus
-            # Doing this too often might flicker, but let's try just once or periodically?
-
-            try:
-                focus_evt = xevent.FocusIn(
-                    display=d,
-                    window=game_window,
-                    detail=X.NotifyDetailNone,
-                    mode=X.NotifyNormal,
-                )
-
-                # 0 = Release, 1 = Press
-                if event.value == 1:  # Press
-                    print(f"Bridge: Injecting Press {x_keycode}", flush=True)
-                    # Send FocusIn before Press
-                    game_window.send_event(
-                        focus_evt, propagate=False, event_mask=X.FocusChangeMask
-                    )
-                    d.flush()
-
-                    event_obj = xevent.KeyPress(
-                        time=int(time.time()),
-                        root=root.id,
-                        window=game_window.id,
-                        same_screen=1,
-                        child=X.NONE,
-                        root_x=0,
-                        root_y=0,
-                        event_x=0,
-                        event_y=0,
-                        state=0,
-                        detail=x_keycode,
-                    )
-                    game_window.send_event(
-                        event_obj, propagate=False, event_mask=X.KeyPressMask
-                    )
-                    d.flush()
-
-                elif event.value == 0:  # Release
-                    print(f"Bridge: Injecting Release {x_keycode}", flush=True)
-                    event_obj = xevent.KeyRelease(
-                        time=int(time.time()),
-                        root=root.id,
-                        window=game_window.id,
-                        same_screen=1,
-                        child=X.NONE,
-                        root_x=0,
-                        root_y=0,
-                        event_x=0,
-                        event_y=0,
-                        state=0,
-                        detail=x_keycode,
-                    )
-                    game_window.send_event(
-                        event_obj, propagate=False, event_mask=X.KeyReleaseMask
-                    )
-                    d.flush()
-            except error.XError as e:
+    try:
+        for event in dev.read_loop():
+            if event.type == evdev.ecodes.EV_KEY:
+                # Linux input keycode to X11 keycode mapping is usually +8
+                x_keycode = event.code + 8
                 print(
-                    f"Bridge: X Protocol Error ({e}). Window might be gone.", flush=True
+                    f"Bridge: Read Event: Code={event.code}, Value={event.value} -> X Keycode={x_keycode}",
+                    flush=True,
                 )
-                game_window = None
-                continue
+
+                # Send FocusIn event occasionally to trick game into thinking it has focus
+                # Doing this too often might flicker, but let's try just once or periodically?
+
+                try:
+                    focus_evt = xevent.FocusIn(
+                        display=d,
+                        window=game_window,
+                        detail=X.NotifyDetailNone,
+                        mode=X.NotifyNormal,
+                    )
+
+                    # 0 = Release, 1 = Press
+                    if event.value == 1:  # Press
+                        print(f"Bridge: Injecting Press {x_keycode}", flush=True)
+                        # Note: We removed the explicit FocusIn injection here as it might interfere
+                        # with the game's actual focus state and block physical input.
+                        # Since we target the inner window directly, standard events should work.
+
+                        event_obj = xevent.KeyPress(
+                            time=int(time.time()),
+                            root=root.id,
+                            window=game_window.id,
+                            same_screen=1,
+                            child=X.NONE,
+                            root_x=0,
+                            root_y=0,
+                            event_x=0,
+                            event_y=0,
+                            state=0,
+                            detail=x_keycode,
+                        )
+                        game_window.send_event(
+                            event_obj, propagate=False, event_mask=X.KeyPressMask
+                        )
+                        d.flush()
+
+                    elif event.value == 0:  # Release
+                        print(f"Bridge: Injecting Release {x_keycode}", flush=True)
+                        event_obj = xevent.KeyRelease(
+                            time=int(time.time()),
+                            root=root.id,
+                            window=game_window.id,
+                            same_screen=1,
+                            child=X.NONE,
+                            root_x=0,
+                            root_y=0,
+                            event_x=0,
+                            event_y=0,
+                            state=0,
+                            detail=x_keycode,
+                        )
+                        game_window.send_event(
+                            event_obj, propagate=False, event_mask=X.KeyReleaseMask
+                        )
+                        d.flush()
+                except error.XError as e:
+                    print(
+                        f"Bridge: X Protocol Error ({e}). Window might be gone.",
+                        flush=True,
+                    )
+                    game_window = None
+                    continue
+    except OSError as e:
+        if e.errno == 19:
+            print("Bridge: Input device disconnected. Exiting.", flush=True)
+        else:
+            raise
 
 
 if __name__ == "__main__":

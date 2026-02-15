@@ -111,7 +111,9 @@ DRUM_MAPPING: dict[int, int | list[int]] = {
 
 KEY_NAMES: dict[int, str] = {}
 if e:
-    KEY_NAMES = {v: n for n, v in e.ecodes.items() if isinstance(v, int)}
+    KEY_NAMES = {
+        v: n for n, v in e.ecodes.items() if isinstance(v, int) and n.startswith("KEY_")
+    }
 
 
 def get_key_name(key_code: int) -> str:
