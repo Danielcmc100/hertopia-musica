@@ -1,0 +1,18 @@
+{
+  "resolution": {
+    "width": 3286,
+    "height": 1080
+  },
+  "grid": {
+    "top_left": {
+      "x": 1977,
+      "y": 251
+    },
+    "bottom_right": {
+      "x": 2635,
+      "y": 911
+    },
+    "width": 150,
+    "height": 150
+  }
+}
